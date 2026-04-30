@@ -1,4 +1,4 @@
-const API_KEY = 'r8_QVtw5j9iuBiSyFwHneSC2BGucYTI2vM2x3bpg';
+const API_KEY = process.env.REPLICATE_API_KEY;
 
 export default async (request) => {
   const url = new URL(request.url);
