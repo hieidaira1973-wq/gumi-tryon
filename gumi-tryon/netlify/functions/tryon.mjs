@@ -23,13 +23,30 @@ export default async (request) => {
       body: JSON.stringify(body)
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch(e) {
+      return Response.json(
+        { error: `Replicate parse error: ${text.slice(0, 200)}` },
+        { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    if (!res.ok) {
+      return Response.json(
+        { error: data.detail || data.error || `Replicate HTTP ${res.status}` },
+        { status: res.status, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
 
     return Response.json(data, {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
+
   } catch (err) {
-    return Response.json({ error: err.message }, {
+    return Response.json({ error: `Function error: ${err.message}` }, {
       status: 500,
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
