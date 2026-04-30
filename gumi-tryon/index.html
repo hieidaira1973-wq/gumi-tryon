@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>バーチャル試着 | GUMI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      height: 100dvh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .screen {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      transition: transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.35s ease;
+    }
+    .screen.hidden    { transform: translateX(100%); opacity: 0; pointer-events: none; }
+    .screen.slide-out { transform: translateX(-30%); opacity: 0; pointer-events: none; }
+
+    /* ── WELCOME ── */
+    #s-welcome {
+      background: linear-gradient(160deg, #0d0d1f 0%, #0c1e3c 50%, #0a2a4a 100%);
+      align-items: center; justify-content: center; text-align: center;
+      padding: 40px 32px 60px; gap: 0;
+    }
+    .brand-logo {
+      font-size: 52px; font-weight: 900; letter-spacing: 10px;
+      background: linear-gradient(135deg, #a8d8ff, #dbb8ff, #a8ffee);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 4px;
+    }
+    .brand-sub { font-size: 10px; letter-spacing: 5px; color: rgba(255,255,255,0.4); margin-bottom: 48px; }
+    .qr-frame {
+      width: 90px; height: 90px;
+      border: 2px solid rgba(168,216,255,0.35); border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 36px; position: relative;
+      animation: breathe 2.4s ease-in-out infinite;
+    }
+    .qr-frame::before {
+      content: ''; position: absolute; inset: -8px;
+      border: 1px solid rgba(168,216,255,0.12); border-radius: 24px;
+      animation: breathe 2.4s ease-in-out infinite reverse;
+    }
+    @keyframes breathe {
+      0%,100% { box-shadow: 0 0 0 0 rgba(168,216,255,0.25); }
+      50%      { box-shadow: 0 0 0 16px rgba(168,216,255,0); }
+    }
+    .welcome-desc { font-size: 14px; line-height: 2; color: rgba(255,255,255,0.65); margin-bottom: 36px; }
+    .welcome-desc strong { color: #a8d8ff; }
+    .steps-row { display: flex; gap: 8px; margin-bottom: 44px; justify-content: center; }
+    .step-chip {
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px; padding: 6px 12px; font-size: 11px; color: rgba(255,255,255,0.6);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .btn-start {
+      background: linear-gradient(135deg, #a8d8ff, #dbb8ff);
+      color: #0a0a1f; border: none; padding: 17px 52px;
+      font-size: 16px; font-weight: 800; border-radius: 50px; cursor: pointer;
+      letter-spacing: 1px; box-shadow: 0 10px 36px rgba(168,216,255,0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-start:active { transform: scale(0.96); }
+
+    /* ── CAMERA ── */
+    #s-camera { background: #000; }
+    .cam-header {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: env(safe-area-inset-top, 44px) 20px 16px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+      z-index: 20; display: flex; justify-content: space-between; align-items: center;
+    }
+    .back-btn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; padding: 7px 16px; border-radius: 20px; cursor: pointer;
+      font-size: 13px; backdrop-filter: blur(8px);
+    }
+    .cam-title { font-size: 15px; font-weight: 600; }
+    #video { width: 100%; height: 100%; object-fit: cover; }
+    #canvas-capture { display: none; }
+    .body-guide {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px; height: 310px;
+      border: 2px solid rgba(255,255,255,0.55);
+      border-radius: 100px 100px 60px 60px;
+      box-shadow: 0 0 0 4000px rgba(0,0,0,0.45); pointer-events: none;
+    }
+    .guide-text {
+      position: absolute; bottom: 160px; left: 0; right: 0;
+      text-align: center; font-size: 12px; color: rgba(255,255,255,0.75);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    }
+    .cam-footer {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 24px 40px calc(env(safe-area-inset-bottom, 0px) + 36px);
+      background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+      display: flex; justify-content: space-between; align-items: center; z-index: 20;
+    }
+    .side-cam-btn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; padding: 10px 16px; border-radius: 20px;
+      cursor: pointer; font-size: 12px; backdrop-filter: blur(8px);
+    }
+    .shutter {
+      width: 72px; height: 72px; border-radius: 50%; background: #fff;
+      border: 5px solid rgba(255,255,255,0.4); box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
+      cursor: pointer; transition: transform 0.12s; flex-shrink: 0;
+    }
+    .shutter:active { transform: scale(0.88); }
+    input[type="file"] { display: none; }
+    .no-cam-box {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px; padding: 40px; text-align: center;
+    }
+
+    /* ── CLOTHES ── */
+    #s-clothes { background: #f3f3f6; color: #1a1a2e; }
+    .clothes-header {
+      background: #fff;
+      padding: env(safe-area-inset-top, 44px) 20px 14px;
+      box-shadow: 0 1px 0 #eee;
+    }
+    .header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .thumb-circle {
+      width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+      border: 2.5px solid #a8d8ff; background: #dde; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; overflow: hidden;
+    }
+    .header-text h2 { font-size: 17px; font-weight: 700; color: #1a1a2e; }
+    .header-text p  { font-size: 12px; color: #888; margin-top: 1px; }
+    .cat-tabs {
+      display: flex; gap: 6px; padding: 12px 20px 0;
+      overflow-x: auto; background: #fff; scrollbar-width: none;
+    }
+    .cat-tabs::-webkit-scrollbar { display: none; }
+    .ctab {
+      padding: 6px 14px; border-radius: 20px; border: 1.5px solid #ddd;
+      font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer;
+      transition: all 0.18s; background: #fff; color: #666;
+    }
+    .ctab.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+    .clothes-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 10px; padding: 14px; overflow-y: auto; flex: 1;
+      -webkit-overflow-scrolling: touch;
+    }
+    .c-card {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      cursor: pointer; border: 2.5px solid transparent;
+      transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .c-card.selected { border-color: #a8d8ff; box-shadow: 0 4px 20px rgba(168,216,255,0.35); }
+    .c-thumb {
+      width: 100%; aspect-ratio: 3/4;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .c-thumb img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .c-thumb-emoji {
+      font-size: 72px;
+    }
+    .c-selected-badge {
+      position: absolute; top: 8px; right: 8px;
+      width: 24px; height: 24px; background: #a8d8ff; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .c-card.selected .c-selected-badge { opacity: 1; }
+    .c-info { padding: 8px 10px 12px; }
+    .c-name  { font-size: 12px; font-weight: 600; color: #1a1a2e; }
+    .c-price { font-size: 13px; color: #d63031; font-weight: 700; margin-top: 2px; }
+    .clothes-footer {
+      padding: 14px 20px calc(env(safe-area-inset-bottom, 0px) + 16px);
+      background: #fff; box-shadow: 0 -1px 0 #eee, 0 -8px 24px rgba(0,0,0,0.06);
+    }
+    .btn-tryon {
+      width: 100%; background: linear-gradient(135deg, #1a1a2e, #0c1e3c);
+      color: #fff; border: none; padding: 16px; font-size: 16px; font-weight: 700;
+      border-radius: 14px; cursor: pointer; letter-spacing: 0.5px; transition: opacity 0.2s;
+    }
+    .btn-tryon:disabled { opacity: 0.35; cursor: default; }
+
+    /* ── PROCESSING ── */
+    #s-processing {
+      background: radial-gradient(ellipse at 50% 30%, #0c1e3c 0%, #0a0a1a 70%);
+      align-items: center; justify-content: center; text-align: center; padding: 40px 32px;
+    }
+    .spinner-wrap { width: 130px; height: 130px; margin: 0 auto 48px; position: relative; }
+    .ring {
+      position: absolute; inset: 0; border: 3px solid transparent;
+      border-radius: 50%; animation: spin 1.1s linear infinite;
+    }
+    .ring:nth-child(1) { border-top-color: #a8d8ff; }
+    .ring:nth-child(2) { inset: 18px; border-top-color: #dbb8ff; animation-duration: 0.85s; animation-direction: reverse; }
+    .ring:nth-child(3) { inset: 36px; border-top-color: #a8ffee; animation-duration: 1.4s; }
+    .spinner-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .proc-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .proc-sub   { font-size: 13px; color: rgba(255,255,255,0.45); margin-bottom: 40px; }
+    .step-list { list-style: none; text-align: left; width: 100%; max-width: 280px; }
+    .proc-step {
+      padding: 10px 0; font-size: 13px; color: rgba(255,255,255,0.3);
+      display: flex; align-items: center; gap: 12px; transition: color 0.45s;
+    }
+    .proc-step.done   { color: #a8ffee; }
+    .proc-step.active { color: #fff; }
+    .proc-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    /* ── RESULT ── */
+    #s-result { background: #080808; }
+    .result-header {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: env(safe-area-inset-top, 44px) 20px 16px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent);
+      z-index: 20; display: flex; justify-content: space-between; align-items: center;
+    }
+    .result-title { font-size: 15px; font-weight: 600; }
+    .result-img-wrap { flex: 1; position: relative; overflow: hidden; background: #111; }
+    #result-img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    #result-canvas { width: 100%; height: 100%; display: block; }
+    .ai-badge {
+      position: absolute; top: 70px; right: 16px;
+      background: rgba(168,216,255,0.12); border: 1px solid rgba(168,216,255,0.3);
+      backdrop-filter: blur(12px); padding: 6px 12px; border-radius: 20px;
+      font-size: 11px; color: #a8d8ff; letter-spacing: 0.5px;
+    }
+    .result-footer {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 20px 20px calc(env(safe-area-inset-bottom, 0px) + 28px);
+      background: linear-gradient(to top, rgba(0,0,0,0.97) 60%, transparent); z-index: 20;
+    }
+    .result-item-name  { font-size: 17px; font-weight: 700; text-align: center; margin-bottom: 2px; }
+    .result-item-price { font-size: 19px; font-weight: 800; color: #a8d8ff; text-align: center; margin-bottom: 16px; }
+    .result-btns { display: flex; gap: 10px; margin-bottom: 10px; }
+    .btn-save {
+      flex: 1; padding: 14px; border-radius: 12px;
+      border: 1.5px solid rgba(255,255,255,0.25); background: transparent;
+      color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-buy {
+      flex: 2; padding: 14px; border-radius: 12px; border: none;
+      background: linear-gradient(135deg, #a8d8ff, #dbb8ff);
+      color: #0a0a1f; font-size: 14px; font-weight: 800; cursor: pointer;
+    }
+    .btn-retry {
+      width: 100%; padding: 12px; border-radius: 12px; border: none;
+      background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6);
+      font-size: 13px; cursor: pointer;
+    }
+
+    /* Error toast */
+    .toast {
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+      background: rgba(231,76,60,0.9); color: #fff; padding: 10px 20px;
+      border-radius: 20px; font-size: 13px; z-index: 999;
+      display: none; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- SCREEN 1: WELCOME -->
+<div class="screen" id="s-welcome">
+  <div class="brand-logo">GUMI</div>
+  <div class="brand-sub">VIRTUAL TRY-ON</div>
+  <div class="qr-frame">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+      <rect x="2" y="2" width="16" height="16" rx="2" stroke="white" stroke-width="1.8"/>
+      <rect x="5.5" y="5.5" width="9" height="9" fill="white" rx="1"/>
+      <rect x="26" y="2" width="16" height="16" rx="2" stroke="white" stroke-width="1.8"/>
+      <rect x="29.5" y="5.5" width="9" height="9" fill="white" rx="1"/>
+      <rect x="2" y="26" width="16" height="16" rx="2" stroke="white" stroke-width="1.8"/>
+      <rect x="5.5" y="29.5" width="9" height="9" fill="white" rx="1"/>
+      <rect x="26" y="26" width="4" height="4" fill="white" rx="0.5"/>
+      <rect x="33" y="26" width="4" height="4" fill="white" rx="0.5"/>
+      <rect x="29.5" y="29.5" width="4" height="4" fill="white" rx="0.5"/>
+      <rect x="26" y="33" width="4" height="4" fill="white" rx="0.5"/>
+      <rect x="33" y="33" width="7" height="7" fill="white" rx="0.5"/>
+    </svg>
+  </div>
+  <p class="welcome-desc">
+    <strong>QRコードを読み取りました！</strong><br>
+    写真を撮って、着たい服を選ぶだけ。<br>
+    AIがあなたに試着画像を生成します。
+  </p>
+  <div class="steps-row">
+    <div class="step-chip">📸 撮影</div>
+    <div class="step-chip" style="color:rgba(255,255,255,0.35)">→</div>
+    <div class="step-chip">👗 服を選ぶ</div>
+    <div class="step-chip" style="color:rgba(255,255,255,0.35)">→</div>
+    <div class="step-chip">✨ AI合成</div>
+  </div>
+  <button class="btn-start" onclick="startCamera()">📸 試着を始める</button>
+</div>
+
+
+<!-- SCREEN 2: CAMERA -->
+<div class="screen hidden" id="s-camera">
+  <div class="cam-header">
+    <button class="back-btn" onclick="backTo('s-welcome','s-camera')">← 戻る</button>
+    <span class="cam-title">写真を撮る</span>
+    <div style="width:64px"></div>
+  </div>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas-capture"></canvas>
+  <div class="body-guide" id="body-guide"></div>
+  <div class="guide-text" id="guide-text">全身が枠に収まるように立ってください</div>
+  <div class="cam-footer">
+    <label class="side-cam-btn" for="file-upload">📁 ファイル</label>
+    <input type="file" id="file-upload" accept="image/*" onchange="handleUpload(event)">
+    <button class="shutter" id="shutter-btn" onclick="capturePhoto()"></button>
+    <button class="side-cam-btn" onclick="flipCamera()">🔄 反転</button>
+  </div>
+</div>
+
+
+<!-- SCREEN 3: CLOTHES -->
+<div class="screen hidden" id="s-clothes">
+  <div class="clothes-header">
+    <div class="header-row">
+      <div class="thumb-circle" id="thumb-circle">👤</div>
+      <div class="header-text">
+        <h2>服を選ぼう</h2>
+        <p>試着したいアイテムをタップ</p>
+      </div>
+      <button class="back-btn" style="margin-left:auto" onclick="backTo('s-camera','s-clothes')">← 撮り直す</button>
+    </div>
+  </div>
+  <div class="cat-tabs">
+    <button class="ctab active" onclick="filterBy('all',this)">すべて</button>
+    <button class="ctab" onclick="filterBy('tops',this)">トップス</button>
+    <button class="ctab" onclick="filterBy('bottoms',this)">ボトムス</button>
+    <button class="ctab" onclick="filterBy('onepiece',this)">ワンピース</button>
+    <button class="ctab" onclick="filterBy('outer',this)">アウター</button>
+  </div>
+  <div class="clothes-grid" id="clothes-grid"></div>
+  <div class="clothes-footer">
+    <button class="btn-tryon" id="btn-tryon" disabled onclick="beginProcessing()">
+      ✨ この服を試着する
+    </button>
+  </div>
+</div>
+
+
+<!-- SCREEN 4: PROCESSING -->
+<div class="screen hidden" id="s-processing">
+  <div class="spinner-wrap">
+    <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+    <div class="spinner-icon">🤖</div>
+  </div>
+  <div class="proc-title">AIが合成中...</div>
+  <div class="proc-sub" id="proc-sub">少しお待ちください（約20〜40秒）</div>
+  <ul class="step-list">
+    <li class="proc-step" id="ps1"><span class="proc-dot"></span>体型・ポーズを解析</li>
+    <li class="proc-step" id="ps2"><span class="proc-dot"></span>服のシルエットをフィッティング</li>
+    <li class="proc-step" id="ps3"><span class="proc-dot"></span>自然な着用感を生成</li>
+    <li class="proc-step" id="ps4"><span class="proc-dot"></span>高解像度で仕上げ</li>
+  </ul>
+</div>
+
+
+<!-- SCREEN 5: RESULT -->
+<div class="screen hidden" id="s-result">
+  <div class="result-header">
+    <button class="back-btn" onclick="retryOutfit()">← 他の服を見る</button>
+    <span class="result-title">試着結果</span>
+    <div style="width:80px"></div>
+  </div>
+  <div class="result-img-wrap" id="result-img-wrap">
+    <img id="result-img" src="" alt="試着結果" style="display:none">
+    <canvas id="result-canvas" style="display:none"></canvas>
+    <div class="ai-badge">✨ AI Virtual Try-On</div>
+  </div>
+  <div class="result-footer">
+    <div class="result-item-name"  id="r-name">-</div>
+    <div class="result-item-price" id="r-price">-</div>
+    <div class="result-btns">
+      <button class="btn-save" onclick="saveImage()">💾 保存</button>
+      <button class="btn-buy">🛒 カートに追加</button>
+    </div>
+    <button class="btn-retry" onclick="retryOutfit()">別のコーデを試す →</button>
+  </div>
+</div>
+
+
+<script>
+/* ━━━━ CONFIG ━━━━ */
+const API_KEY = 'r8_QVtw5j9iuBiSyFwHneSC2BGucYTI2vM2x3bpg';
+const MODEL   = 'cuuupid/idm-vton';
+
+/* ━━━━ DATA ━━━━ */
+const ITEMS = [
+  {
+    id:1, name:"フローラルワンピース", price:"¥12,800", cat:"onepiece", bg:"#F9C6D0", emoji:"👗",
+    garmImg:"https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=768&q=80",
+    garmDesc:"floral midi dress with pink flowers pattern"
+  },
+  {
+    id:2, name:"リネンオーバーシャツ", price:"¥8,900", cat:"tops", bg:"#B6D8F2", emoji:"👔",
+    garmImg:"https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=768&q=80",
+    garmDesc:"oversized white linen button-up shirt"
+  },
+  {
+    id:3, name:"テーパードスラックス", price:"¥9,500", cat:"bottoms", bg:"#B0BEC5", emoji:"👖",
+    garmImg:"https://images.unsplash.com/photo-1542272604-787c3835535d?w=768&q=80",
+    garmDesc:"slim tapered gray trousers"
+  },
+  {
+    id:4, name:"ケーブルニットセーター", price:"¥11,200", cat:"tops", bg:"#F0D9B5", emoji:"🧶",
+    garmImg:"https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=768&q=80",
+    garmDesc:"chunky cream cable knit sweater"
+  },
+  {
+    id:5, name:"プリーツミニスカート", price:"¥7,800", cat:"bottoms", bg:"#C8E6C9", emoji:"🩱",
+    garmImg:"https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=768&q=80",
+    garmDesc:"green pleated mini skirt"
+  },
+  {
+    id:6, name:"チェスターコート", price:"¥28,000", cat:"outer", bg:"#D7CCC8", emoji:"🧥",
+    garmImg:"https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=768&q=80",
+    garmDesc:"camel chester overcoat"
+  },
+  {
+    id:7, name:"マキシフレアワンピ", price:"¥15,400", cat:"onepiece", bg:"#CE93D8", emoji:"👘",
+    garmImg:"https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=768&q=80",
+    garmDesc:"purple flowy maxi dress"
+  },
+  {
+    id:8, name:"デニムジャケット", price:"¥16,800", cat:"outer", bg:"#90CAF9", emoji:"🫙",
+    garmImg:"https://images.unsplash.com/photo-1601333144130-8cbb312386b6?w=768&q=80",
+    garmDesc:"classic blue denim jacket"
+  },
+];
+
+/* ━━━━ STATE ━━━━ */
+let capturedData = null;
+let selectedItem = null;
+let stream       = null;
+let facingMode   = "user";
+let aiResultUrl  = null;
+
+/* ━━━━ NAVIGATION ━━━━ */
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.toggle('hidden', s.id !== id);
+    s.classList.remove('slide-out');
+  });
+}
+function backTo(target, current) {
+  document.getElementById(current).classList.add('slide-out');
+  setTimeout(() => show(target), 50);
+  stopStream();
+}
+
+/* ━━━━ CAMERA ━━━━ */
+async function startCamera() {
+  show('s-camera');
+  await openStream();
+}
+async function openStream() {
+  stopStream();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } }
+    });
+    const vid = document.getElementById('video');
+    vid.srcObject = stream; vid.style.display = '';
+    document.getElementById('body-guide').style.display = '';
+    document.getElementById('guide-text').style.display = '';
+    document.getElementById('shutter-btn').style.display = '';
+  } catch(e) { showNoCamera(); }
+}
+function stopStream() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+function flipCamera() {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  openStream();
+}
+function showNoCamera() {
+  document.getElementById('video').style.display = 'none';
+  document.getElementById('body-guide').style.display = 'none';
+  document.getElementById('guide-text').style.display = 'none';
+  document.getElementById('shutter-btn').style.display = 'none';
+  document.querySelector('.cam-footer').innerHTML = `
+    <div class="no-cam-box">
+      <div style="font-size:56px">📷</div>
+      <div style="font-size:16px;font-weight:600">カメラを使用できません</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.5)">画像ファイルをアップロードしてください</div>
+      <label class="btn-start" for="file-upload-alt" style="display:inline-block;padding:14px 32px;cursor:pointer;font-size:15px">
+        📁 画像を選択
+      </label>
+      <input type="file" id="file-upload-alt" accept="image/*" onchange="handleUpload(event)">
+    </div>`;
+}
+function capturePhoto() {
+  const vid = document.getElementById('video');
+  const cvs = document.getElementById('canvas-capture');
+  cvs.width = vid.videoWidth || 720; cvs.height = vid.videoHeight || 1280;
+  cvs.getContext('2d').drawImage(vid, 0, 0);
+  capturedData = cvs.toDataURL('image/jpeg', 0.85);
+  stopStream(); goToClothes();
+}
+function handleUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { capturedData = ev.target.result; goToClothes(); };
+  reader.readAsDataURL(file);
+}
+
+/* ━━━━ CLOTHES ━━━━ */
+function goToClothes() {
+  const thumb = document.getElementById('thumb-circle');
+  if (capturedData) {
+    thumb.innerHTML = `<img src="${capturedData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  }
+  selectedItem = null;
+  document.getElementById('btn-tryon').disabled = true;
+  document.querySelectorAll('.ctab').forEach((t,i) => t.classList.toggle('active', i===0));
+  renderGrid('all'); show('s-clothes');
+}
+function renderGrid(filter) {
+  const items = filter === 'all' ? ITEMS : ITEMS.filter(i => i.cat === filter);
+  document.getElementById('clothes-grid').innerHTML = items.map(item => `
+    <div class="c-card" id="card-${item.id}" onclick="selectItem(${item.id})">
+      <div class="c-thumb" style="background:${item.bg}">
+        <img src="${item.garmImg}" alt="${item.name}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="c-thumb-emoji" style="display:none">${item.emoji}</div>
+        <div class="c-selected-badge">✓</div>
+      </div>
+      <div class="c-info">
+        <div class="c-name">${item.name}</div>
+        <div class="c-price">${item.price}</div>
+      </div>
+    </div>`).join('');
+}
+function filterBy(cat, tab) {
+  document.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  selectedItem = null;
+  document.getElementById('btn-tryon').disabled = true;
+  renderGrid(cat);
+}
+function selectItem(id) {
+  selectedItem = ITEMS.find(i => i.id === id);
+  document.querySelectorAll('.c-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById(`card-${id}`).classList.add('selected');
+  document.getElementById('btn-tryon').disabled = false;
+}
+
+/* ━━━━ PROCESSING + REPLICATE API ━━━━ */
+const STEPS = ['ps1','ps2','ps3','ps4'];
+let stepTimer = null;
+
+function animateSteps() {
+  STEPS.forEach(s => document.getElementById(s).className = 'proc-step');
+  let i = 0;
+  function tick() {
+    if (i > 0) document.getElementById(STEPS[i-1]).className = 'proc-step done';
+    if (i < STEPS.length) {
+      document.getElementById(STEPS[i]).className = 'proc-step active';
+      i++;
+      stepTimer = setTimeout(tick, 7000 / STEPS.length);
+    }
+  }
+  tick();
+}
+
+// 画像を圧縮（APIのサイズ制限対策）
+async function compressImage(dataUrl, maxPx = 768) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.src = dataUrl;
+  });
+}
+
+async function beginProcessing() {
+  show('s-processing');
+  aiResultUrl = null;
+  animateSteps();
+
+  try {
+    // 画像を圧縮してからAPI送信
+    const compressed = capturedData ? await compressImage(capturedData) : null;
+    const url = await callIDMVTON(compressed, selectedItem.garmImg, selectedItem.garmDesc);
+    aiResultUrl = url;
+    STEPS.forEach(s => document.getElementById(s).className = 'proc-step done');
+    setTimeout(() => showResult(), 500);
+  } catch(err) {
+    console.error('Replicate error:', err);
+    showToast('⚠️ ' + (err.message || 'AIエラー').slice(0, 60));
+    STEPS.forEach(s => document.getElementById(s).className = 'proc-step done');
+    setTimeout(() => showResult(), 800);
+  }
+}
+
+async function callIDMVTON(humanImg, garmImg, garmDesc) {
+  // Netlify Function経由でReplicate APIを呼ぶ（CORS回避）
+  const createRes = await fetch('/api/tryon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: {
+        human_img:       humanImg,
+        garm_img:        garmImg,
+        garment_des:     garmDesc,
+        is_checked:      true,
+        is_checked_crop: false,
+        denoise_steps:   30,
+        seed:            42
+      }
+    })
+  });
+
+  let prediction;
+  try {
+    prediction = await createRes.json();
+  } catch(e) {
+    throw new Error(`HTTP ${createRes.status}`);
+  }
+
+  if (!createRes.ok) {
+    throw new Error(prediction.detail || prediction.error || `HTTP ${createRes.status}`);
+  }
+
+  if (prediction.status === 'succeeded') return prediction.output[0];
+  if (prediction.error) throw new Error(prediction.error);
+
+  return await pollPrediction(prediction.id);
+}
+
+async function pollPrediction(predId) {
+  for (let attempt = 0; attempt < 90; attempt++) {
+    await sleep(2000);
+    const res  = await fetch(`/api/poll?id=${predId}`);
+    const data = await res.json();
+    if (data.status === 'succeeded') return data.output[0];
+    if (data.status === 'failed')    throw new Error(data.error || 'Prediction failed');
+  }
+  throw new Error('タイムアウト（3分経過）');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ━━━━ RESULT ━━━━ */
+function showResult() {
+  const resultImg    = document.getElementById('result-img');
+  const resultCanvas = document.getElementById('result-canvas');
+  const wrap         = document.getElementById('result-img-wrap');
+
+  if (aiResultUrl) {
+    // Real AI result
+    resultImg.src = aiResultUrl;
+    resultImg.style.display = 'block';
+    resultCanvas.style.display = 'none';
+  } else {
+    // Demo fallback using Canvas
+    resultImg.style.display = 'none';
+    resultCanvas.style.display = 'block';
+    resultCanvas.width  = wrap.offsetWidth  || window.innerWidth;
+    resultCanvas.height = wrap.offsetHeight || window.innerHeight * 0.65;
+    drawDemoResult(resultCanvas);
+  }
+
+  document.getElementById('r-name').textContent  = selectedItem.name;
+  document.getElementById('r-price').textContent = selectedItem.price;
+  show('s-result');
+}
+
+function drawDemoResult(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#111'; ctx.fillRect(0,0,W,H);
+
+  if (capturedData) {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.max(W/img.width, H/img.height);
+      const dw = img.width*scale, dh = img.height*scale;
+      ctx.drawImage(img, (W-dw)/2, (H-dh)/2, dw, dh);
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = selectedItem.bg;
+      ctx.beginPath();
+      ctx.ellipse(W/2, H*0.42, dw*0.22, dh*0.28, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      addVignette(ctx,W,H); addWatermark(ctx,W,H);
+    };
+    img.src = capturedData;
+  } else {
+    ctx.font = `${H*0.28}px serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.2; ctx.fillStyle = selectedItem.bg;
+    ctx.fillRect(0,0,W,H); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff'; ctx.fillText(selectedItem.emoji, W/2, H/2);
+    addVignette(ctx,W,H); addWatermark(ctx,W,H);
+  }
+}
+
+function addVignette(ctx,W,H) {
+  const g = ctx.createRadialGradient(W/2,H/2,H*0.25,W/2,H/2,H*0.85);
+  g.addColorStop(0,'transparent'); g.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+}
+function addWatermark(ctx,W,H) {
+  ctx.font = '10px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillText('✨ GUMI Virtual Try-On', W-10, H-10);
+}
+
+function saveImage() {
+  const img = document.getElementById('result-img');
+  if (img.style.display !== 'none' && img.src) {
+    // AI result: open in new tab (cross-origin canvas restriction)
+    window.open(img.src, '_blank');
+    return;
+  }
+  const canvas = document.getElementById('result-canvas');
+  const link = document.createElement('a');
+  link.download = `gumi-tryon-${Date.now()}.jpg`;
+  link.href = canvas.toDataURL('image/jpeg', 0.92);
+  link.click();
+}
+
+function retryOutfit() {
+  selectedItem = null;
+  document.querySelectorAll('.c-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('btn-tryon').disabled = true;
+  show('s-clothes');
+}
+
+/* ━━━━ TOAST ━━━━ */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 4000);
+}
+
+/* ━━━━ INIT ━━━━ */
+renderGrid('all');
+</script>
+</body>
+</html>
